@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HCR Energy Benchmarking Dashboard</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- PapaParse -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface2: #263147;
+      --border: #334155;
+      --accent: #e94560;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ---- Loading ---- */
+    #loading {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 9999; gap: 16px;
+    }
+    #loading h2 { color: var(--accent); font-size: 1.2rem; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---- Header / Nav ---- */
+    header {
+      background: #16213e;
+      border-bottom: 2px solid #0f3460;
+      padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0; height: 56px;
+    }
+    header h1 { font-size: 1.1rem; font-weight: 700; color: var(--accent); letter-spacing: 0.4px; }
+
+    nav { display: flex; gap: 4px; }
+    nav button {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      padding: 8px 18px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background 0.15s, color 0.15s;
+    }
+    nav button:hover { background: var(--surface2); color: var(--text); }
+    nav button.active { background: var(--accent); color: #fff; }
+
+    /* ---- Views ---- */
+    .view { display: none; flex: 1; overflow: hidden; }
+    .view.active { display: flex; flex-direction: column; }
+
+    /* ---- Portfolio View ---- */
+    #view-portfolio { overflow-y: auto; padding: 20px 24px; gap: 24px; }
+
+    .filter-bar {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--surface); border-radius: 10px;
+      padding: 12px 16px; border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .filter-bar label { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+    .filter-bar select {
+      background: var(--surface2); color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 6px 12px; font-size: 0.875rem; cursor: pointer;
+    }
+    .filter-bar .stat-pill {
+      margin-left: auto; background: var(--surface2);
+      border-radius: 20px; padding: 4px 14px;
+      font-size: 0.8rem; color: var(--muted);
+    }
+    .filter-bar .stat-pill span { color: var(--text); font-weight: 600; }
+
+    .section-title {
+      font-size: 1rem; font-weight: 700; color: var(--text);
+      margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+    }
+    .section-title::before { content: ''; display: block; width: 4px; height: 18px; background: var(--accent); border-radius: 2px; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px; overflow: hidden;
+    }
+    .card-title {
+      font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.6px; margin-bottom: 10px;
+    }
+    .card-title.best { color: var(--green); }
+    .card-title.worst { color: var(--red); }
+
+    .rank-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .rank-table th {
+      text-align: left; padding: 6px 8px;
+      color: var(--muted); font-weight: 600;
+      border-bottom: 1px solid var(--border);
+    }
+    .rank-table td { padding: 6px 8px; border-bottom: 1px solid #1e293b; }
+    .rank-table tr:last-child td { border-bottom: none; }
+    .rank-table tr:hover td { background: var(--surface2); cursor: pointer; }
+    .rank-table .prop-name { font-weight: 600; color: var(--text); max-width: 160px; }
+    .rank-table .prop-name a { color: inherit; text-decoration: none; }
+    .rank-table .prop-name a:hover { color: var(--accent); text-decoration: underline; }
+    .rank-table .val-cell { font-weight: 700; text-align: right; white-space: nowrap; }
+    .rank-table .val-best { color: var(--green); }
+    .rank-table .val-worst { color: var(--red); }
+    .rank-table .portfolio-tag {
+      display: inline-block;
+      font-size: 0.68rem; padding: 1px 6px;
+      border-radius: 10px; background: var(--surface2);
+      color: var(--muted); white-space: nowrap; max-width: 100px; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .hist-container { height: 200px; position: relative; }
+
+    .section-divider {
+      height: 1px; background: var(--border); margin: 4px 0;
+    }
+
+    /* ---- Map View ---- */
+    #view-map { position: relative; }
+    #map { flex: 1; }
+
+    .map-legend {
+      position: absolute; bottom: 30px; right: 12px; z-index: 1000;
+      background: rgba(30, 41, 59, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 16px;
+      backdrop-filter: blur(4px);
+      min-width: 160px;
+    }
+    .map-legend h4 { font-size: 0.75rem; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .legend-gradient {
+      height: 12px; border-radius: 6px;
+      background: linear-gradient(to right, #22c55e, #f59e0b, #ef4444);
+      margin-bottom: 4px;
+    }
+    .legend-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); }
+
+    .map-filter-bar {
+      position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+      z-index: 1000; background: rgba(30, 41, 59, 0.92);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px 14px; display: flex; align-items: center; gap: 10px;
+      backdrop-filter: blur(4px); font-size: 0.82rem;
+    }
+    .map-count { color: var(--muted); font-size: 0.78rem; }
+    .map-count span { color: var(--text); font-weight: 600; }
+
+    .leaflet-popup-content-wrapper {
+      background: #1e293b; color: #e2e8f0;
+      border: 1px solid #334155; border-radius: 10px;
+    }
+    .leaflet-popup-tip { background: #1e293b; }
+    .popup-content { font-size: 0.82rem; min-width: 200px; }
+    .popup-content h3 { font-size: 0.9rem; margin-bottom: 6px; color: #e2e8f0; }
+    .popup-content .popup-row { display: flex; justify-content: space-between; gap: 16px; margin: 3px 0; }
+    .popup-content .popup-label { color: #94a3b8; }
+    .popup-content .popup-val { font-weight: 700; }
+    .popup-btn {
+      margin-top: 10px; width: 100%;
+      background: var(--accent); color: white; border: none;
+      padding: 6px 12px; border-radius: 6px; cursor: pointer;
+      font-size: 0.8rem; font-weight: 600;
+    }
+    .popup-btn:hover { background: #c73652; }
+
+    /* ---- Property View ---- */
+    #view-property { overflow-y: auto; padding: 24px; gap: 20px; }
+
+    .back-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--muted); padding: 8px 16px;
+      border-radius: 8px; cursor: pointer; font-size: 0.85rem;
+      font-weight: 600; transition: color 0.15s, background 0.15s;
+      flex-shrink: 0; align-self: flex-start;
+    }
+    .back-btn:hover { background: var(--surface2); color: var(--text); }
+
+    .prop-header {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px 24px;
+    }
+    .prop-header h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: 4px; }
+    .prop-header .prop-address { color: var(--muted); font-size: 0.875rem; margin-bottom: 12px; }
+    .prop-meta { display: flex; flex-wrap: wrap; gap: 16px; }
+    .prop-meta-item { font-size: 0.8rem; }
+    .prop-meta-item .meta-label { color: var(--muted); margin-bottom: 2px; }
+    .prop-meta-item .meta-val { font-weight: 700; font-size: 0.9rem; }
+
+    .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    .metric-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px;
+    }
+    .metric-card h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 12px; }
+    .metric-value { font-size: 2.2rem; font-weight: 800; margin-bottom: 4px; }
+    .metric-unit { font-size: 0.75rem; color: var(--muted); margin-bottom: 16px; }
+    .metric-card .better-than {
+      font-size: 0.82rem; color: var(--muted); margin-bottom: 8px;
+    }
+    .metric-card .better-than strong { font-size: 1rem; }
+    .metric-card .better-than .good { color: var(--green); }
+    .metric-card .better-than .bad { color: var(--red); }
+    .metric-card .better-than .mid { color: var(--yellow); }
+
+    .rank-bar-wrap { margin-top: 8px; }
+    .rank-bar-track {
+      height: 10px; border-radius: 5px;
+      background: linear-gradient(to right, #22c55e, #f59e0b, #ef4444);
+      position: relative; margin-bottom: 4px;
+    }
+    .rank-bar-marker {
+      position: absolute; top: 50%; transform: translate(-50%, -50%);
+      width: 16px; height: 16px;
+      background: white; border: 3px solid #1e293b;
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
+    }
+    .rank-bar-labels {
+      display: flex; justify-content: space-between;
+      font-size: 0.7rem; color: var(--muted); margin-top: 4px;
+    }
+
+    .portfolio-badge {
+      display: inline-block;
+      background: rgba(233, 69, 96, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(233, 69, 96, 0.3);
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 0.75rem; font-weight: 600;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <h2>Loading HCR Data…</h2>
+</div>
+
+<div id="app" style="display:none; flex-direction:column; height:100vh;">
+
+  <header>
+    <h1>HCR Energy Benchmarking Dashboard</h1>
+    <nav>
+      <button class="active" onclick="showView('portfolio')">Portfolio</button>
+      <button onclick="showView('map')">Map</button>
+      <button id="nav-property" onclick="showView('property')" style="display:none">Property</button>
+    </nav>
+  </header>
+
+  <!-- Portfolio View -->
+  <div id="view-portfolio" class="view active">
+    <div class="filter-bar">
+      <label>Portfolio</label>
+      <select id="portfolio-filter" onchange="updatePortfolioView()">
+        <option value="All">All Portfolios</option>
+      </select>
+      <div class="stat-pill">Showing <span id="filtered-count">—</span> properties</div>
+    </div>
+
+    <!-- EUI Section -->
+    <div>
+      <div class="section-title">Energy Use Intensity (EUI)</div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title best">10 Best — Lowest EUI</div>
+          <table class="rank-table" id="eui-best-table">
+            <thead><tr><th>#</th><th>Property</th><th>Portfolio</th><th style="text-align:right">EUI</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-title worst">10 Worst — Highest EUI</div>
+          <table class="rank-table" id="eui-worst-table">
+            <thead><tr><th>#</th><th>Property</th><th>Portfolio</th><th style="text-align:right">EUI</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-title" style="color:var(--muted)">EUI Distribution (kBTU/sqft)</div>
+        <div class="hist-container"><canvas id="eui-hist"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Emissions Section -->
+    <div>
+      <div class="section-title">Emissions Intensity</div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title best">10 Best — Lowest Emissions</div>
+          <table class="rank-table" id="em-best-table">
+            <thead><tr><th>#</th><th>Property</th><th>Portfolio</th><th style="text-align:right">Intensity</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-title worst">10 Worst — Highest Emissions</div>
+          <table class="rank-table" id="em-worst-table">
+            <thead><tr><th>#</th><th>Property</th><th>Portfolio</th><th style="text-align:right">Intensity</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px; margin-bottom:24px">
+        <div class="card-title" style="color:var(--muted)">Emissions Intensity Distribution (kgCO₂e/sqft)</div>
+        <div class="hist-container"><canvas id="em-hist"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Map View -->
+  <div id="view-map" class="view">
+    <div id="map"></div>
+    <div class="map-filter-bar">
+      <span style="color:var(--muted); font-weight:600;">Map</span>
+      <span class="map-count"><span id="map-count">—</span> properties shown</span>
+    </div>
+    <div class="map-legend">
+      <h4>Emissions Intensity</h4>
+      <div class="legend-gradient"></div>
+      <div class="legend-labels">
+        <span id="legend-min">Low</span>
+        <span id="legend-max">High</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Property View -->
+  <div id="view-property" class="view">
+    <button class="back-btn" id="back-btn">← Back</button>
+    <div class="prop-header" id="prop-header"></div>
+    <div class="metrics-grid" id="prop-metrics"></div>
+  </div>
+
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+let allData = [];
+let euiChart = null;
+let emChart = null;
+let leafletMap = null;
+let mapMarkers = [];
+let currentProperty = null;
+let backView = 'portfolio';
+
+// ─── Color Utilities ─────────────────────────────────────────────────────────
+function pctColor(pct) {
+  // pct: 0=best(green) → 100=worst(red)
+  const hue = Math.round(120 * (1 - pct / 100));
+  return `hsl(${hue}, 80%, 48%)`;
+}
+
+function emissionsColorByPct(pct) {
+  return pctColor(pct);
+}
+
+// ─── Percentile ───────────────────────────────────────────────────────────────
+function computeAllPercentiles(data) {
+  const euiSorted = [...data].sort((a, b) => a.eui - b.eui);
+  const emSorted  = [...data].sort((a, b) => a.emissions - b.emissions);
+  const n = data.length;
+
+  // Build rank maps by index in sorted arrays
+  data.forEach(d => {
+    const euiRank = euiSorted.findIndex(x => x === d);
+    const emRank  = emSorted.findIndex(x => x === d);
+    d.euiPct = Math.round((euiRank / (n - 1)) * 100);
+    d.emPct  = Math.round((emRank  / (n - 1)) * 100);
+  });
+}
+
+// ─── Short portfolio label ────────────────────────────────────────────────────
+function shortPortfolio(p) {
+  if (p.includes('4%')) return '4% LIHTC';
+  if (p.includes('9%')) return '9% LIHTC';
+  if (p.includes('Mitchell')) return 'Mitchell-Lama';
+  return p;
+}
+
+// ─── Histogram helpers ───────────────────────────────────────────────────────
+function makeHistBins(values, binMin, binMax, binSize) {
+  const numBins = Math.ceil((binMax - binMin) / binSize);
+  const counts = new Array(numBins).fill(0);
+  const labels = [];
+  for (let i = 0; i < numBins; i++) {
+    labels.push((binMin + i * binSize).toFixed(1));
+  }
+  values.forEach(v => {
+    const idx = Math.min(Math.floor((v - binMin) / binSize), numBins - 1);
+    if (idx >= 0) counts[idx]++;
+  });
+  return { labels, counts };
+}
+
+// ─── Chart rendering ─────────────────────────────────────────────────────────
+const CHART_DEFAULTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  animation: { duration: 300 },
+  scales: {
+    x: {
+      ticks: { color: '#64748b', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
+      grid: { color: '#1e293b' },
+    },
+    y: {
+      ticks: { color: '#64748b', font: { size: 10 } },
+      grid: { color: '#1e293b' },
+    }
+  }
+};
+
+function renderHistogram(canvasId, chartRef, values, binMin, binMax, binSize, label, barColor) {
+  const { labels, counts } = makeHistBins(values, binMin, binMax, binSize);
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  if (chartRef) chartRef.destroy();
+  return new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label,
+        data: counts,
+        backgroundColor: barColor,
+        borderRadius: 2,
+        borderSkipped: false,
+        barPercentage: 0.95,
+        categoryPercentage: 1.0,
+      }]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        tooltip: {
+          callbacks: {
+            title: (items) => `${items[0].label}–${(parseFloat(items[0].label) + binSize).toFixed(1)}`,
+            label: (item) => `${item.raw} properties`
+          }
+        }
+      }
+    }
+  });
+}
+
+// ─── Table rendering ─────────────────────────────────────────────────────────
+function renderTable(tableId, rows, valueKey, unit, colorClass) {
+  const tbody = document.querySelector(`#${tableId} tbody`);
+  tbody.innerHTML = rows.map((d, i) => {
+    const val = d[valueKey].toFixed(2);
+    return `<tr onclick="openProperty(${allData.indexOf(d)}, 'portfolio')">
+      <td style="color:var(--muted);font-weight:600">${i + 1}</td>
+      <td class="prop-name" title="${d.name}">${d.name}</td>
+      <td><span class="portfolio-tag" title="${d.portfolio}">${shortPortfolio(d.portfolio)}</span></td>
+      <td class="val-cell val-${colorClass}">${val}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── Portfolio View ───────────────────────────────────────────────────────────
+function updatePortfolioView() {
+  const sel = document.getElementById('portfolio-filter').value;
+  const filtered = sel === 'All' ? allData : allData.filter(d => d.portfolio === sel);
+
+  document.getElementById('filtered-count').textContent = filtered.length.toLocaleString();
+
+  // EUI top/bottom 10
+  const byEui = [...filtered].sort((a, b) => a.eui - b.eui);
+  renderTable('eui-best-table',  byEui.slice(0, 10),   'eui', 'kBTU/sqft', 'best');
+  renderTable('eui-worst-table', byEui.slice(-10).reverse(), 'eui', 'kBTU/sqft', 'worst');
+
+  // Emissions top/bottom 10
+  const byEm = [...filtered].sort((a, b) => a.emissions - b.emissions);
+  renderTable('em-best-table',  byEm.slice(0, 10),   'emissions', '', 'best');
+  renderTable('em-worst-table', byEm.slice(-10).reverse(), 'emissions', '', 'worst');
+
+  // Histograms
+  euiChart = renderHistogram('eui-hist', euiChart, filtered.map(d => d.eui),
+    20, 122, 5, 'EUI (kBTU/sqft)', 'rgba(96, 165, 250, 0.7)');
+  emChart  = renderHistogram('em-hist',  emChart,  filtered.map(d => d.emissions),
+    1.0, 7.75, 0.25, 'Emissions Intensity', 'rgba(167, 139, 250, 0.7)');
+}
+
+// ─── Map ─────────────────────────────────────────────────────────────────────
+function initMap() {
+  if (leafletMap) return;
+  leafletMap = L.map('map', { zoomControl: true }).setView([42.5, -75.5], 7);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap, © CARTO',
+    subdomains: 'abcd', maxZoom: 19
+  }).addTo(leafletMap);
+
+  const emMin = Math.min(...allData.map(d => d.emissions));
+  const emMax = Math.max(...allData.map(d => d.emissions));
+
+  document.getElementById('legend-min').textContent = emMin.toFixed(2);
+  document.getElementById('legend-max').textContent = emMax.toFixed(2);
+
+  mapMarkers = allData.map((d, i) => {
+    const color = emissionsColorByPct(d.emPct);
+    const marker = L.circleMarker([d.lat, d.lon], {
+      radius: 7,
+      fillColor: color,
+      color: 'rgba(0,0,0,0.4)',
+      weight: 1,
+      fillOpacity: 0.85
+    }).addTo(leafletMap);
+
+    marker.bindPopup(`
+      <div class="popup-content">
+        <h3>${d.name}</h3>
+        <div class="popup-row"><span class="popup-label">Portfolio</span><span>${shortPortfolio(d.portfolio)}</span></div>
+        <div class="popup-row"><span class="popup-label">Address</span><span>${d.address}</span></div>
+        <div class="popup-row"><span class="popup-label">EUI</span><span class="popup-val">${d.eui.toFixed(2)} kBTU/sqft</span></div>
+        <div class="popup-row"><span class="popup-label">Emissions Intensity</span><span class="popup-val" style="color:${color}">${d.emissions.toFixed(2)}</span></div>
+        <button class="popup-btn" onclick="openProperty(${i}, 'map')">View Property Details →</button>
+      </div>
+    `, { maxWidth: 280 });
+
+    return marker;
+  });
+
+  document.getElementById('map-count').textContent = allData.length.toLocaleString();
+}
+
+// ─── Property View ────────────────────────────────────────────────────────────
+function openProperty(idx, from) {
+  backView = from;
+  currentProperty = allData[idx];
+  const d = currentProperty;
+
+  // Back button logic
+  document.getElementById('back-btn').onclick = () => showView(backView);
+
+  // Header
+  document.getElementById('prop-header').innerHTML = `
+    <h2>${d.name}</h2>
+    <div class="prop-address">${d.address}</div>
+    <div class="prop-meta">
+      <div class="prop-meta-item">
+        <div class="meta-label">Portfolio</div>
+        <div class="meta-val"><span class="portfolio-badge">${shortPortfolio(d.portfolio)}</span></div>
+      </div>
+      ${d.county ? `<div class="prop-meta-item">
+        <div class="meta-label">County</div>
+        <div class="meta-val">${d.county}</div>
+      </div>` : ''}
+      ${d.units ? `<div class="prop-meta-item">
+        <div class="meta-label">Building Units</div>
+        <div class="meta-val">${d.units}</div>
+      </div>` : ''}
+      ${d.sqft ? `<div class="prop-meta-item">
+        <div class="meta-label">Square Footage</div>
+        <div class="meta-val">${parseInt(d.sqft.replace(/,/g, '')).toLocaleString()} sqft</div>
+      </div>` : ''}
+    </div>
+  `;
+
+  // Metrics cards
+  function metricCard(title, value, unit, pct, suffix) {
+    const betterThan = 100 - pct;
+    let qualClass = betterThan >= 67 ? 'good' : betterThan >= 34 ? 'mid' : 'bad';
+    const color = pctColor(pct);
+    return `
+      <div class="metric-card">
+        <h3>${title}</h3>
+        <div class="metric-value" style="color:${color}">${value}</div>
+        <div class="metric-unit">${unit} · lower is better</div>
+        <div class="better-than">
+          Better than <strong class="${qualClass}">${betterThan}%</strong> of HCR properties
+        </div>
+        <div class="rank-bar-wrap">
+          <div class="rank-bar-track">
+            <div class="rank-bar-marker" style="left:${pct}%"></div>
+          </div>
+          <div class="rank-bar-labels">
+            <span style="color:var(--green)">Best</span>
+            <span>Percentile: ${pct}</span>
+            <span style="color:var(--red)">Worst</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  document.getElementById('prop-metrics').innerHTML =
+    metricCard('Site EUI', d.eui.toFixed(2), 'kBTU/sqft', d.euiPct, '') +
+    metricCard('Emissions Intensity', d.emissions.toFixed(2), 'kgCO₂e/sqft', d.emPct, '');
+
+  // Show nav tab and switch
+  document.getElementById('nav-property').style.display = 'inline-block';
+  showView('property');
+}
+
+// ─── View Switching ───────────────────────────────────────────────────────────
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+
+  document.getElementById(`view-${name}`).classList.add('active');
+  document.querySelector(`nav button[onclick="showView('${name}')"]`).classList.add('active');
+
+  if (name === 'map') {
+    initMap();
+    setTimeout(() => leafletMap && leafletMap.invalidateSize(), 100);
+  }
+}
+
+// ─── Load CSV ─────────────────────────────────────────────────────────────────
+Papa.parse('hcr_data/HCR_public_data_fake_energy.csv', {
+  download: true,
+  header: true,
+  skipEmptyLines: true,
+  encoding: 'UTF-8',
+  complete: function(results) {
+    allData = results.data
+      .map(row => ({
+        portfolio:  (row['Portfolio'] || '').trim(),
+        name:       (row['Property name'] || row['Address'] || '').trim(),
+        address:    (row['Address'] || '').trim(),
+        lat:        parseFloat(row['latitude']),
+        lon:        parseFloat(row['longitude']),
+        eui:        parseFloat((row['Site EUI (kBTU/sqft)'] || '').replace(/,/g, '').trim()),
+        emissions:  parseFloat((row['Site Emissions Intensity'] || '').replace(/,/g, '').trim()),
+        sqft:       (row['Square footage'] || '').trim(),
+        units:      (row['Building Units'] || '').trim(),
+        county:     (row['County'] || '').trim(),
+      }))
+      .filter(d => !isNaN(d.eui) && !isNaN(d.emissions) && !isNaN(d.lat) && !isNaN(d.lon));
+
+    // Compute global percentile ranks (lower value = lower percentile = better)
+    computeAllPercentiles(allData);
+
+    // Populate portfolio filter
+    const portfolios = [...new Set(allData.map(d => d.portfolio))].sort();
+    const sel = document.getElementById('portfolio-filter');
+    portfolios.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p;
+      opt.textContent = p;
+      sel.appendChild(opt);
+    });
+
+    // Initial render
+    updatePortfolioView();
+
+    // Show app
+    document.getElementById('loading').style.display = 'none';
+    const app = document.getElementById('app');
+    app.style.display = 'flex';
+  },
+  error: function(err) {
+    document.getElementById('loading').innerHTML =
+      `<h2 style="color:#ef4444">Error loading data</h2><p style="color:#94a3b8">${err.message}</p>`;
+  }
+});
+</script>
+</body>
+</html>
