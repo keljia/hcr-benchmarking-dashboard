@@ -408,16 +408,13 @@ function emissionsColorByPct(pct) {
 
 // ─── Percentile ───────────────────────────────────────────────────────────────
 function computeAllPercentiles(data) {
-  const euiSorted = [...data].sort((a, b) => a.eui - b.eui);
-  const emSorted  = [...data].sort((a, b) => a.emissions - b.emissions);
   const n = data.length;
-
-  // Build rank maps by index in sorted arrays
-  data.forEach(d => {
-    const euiRank = euiSorted.findIndex(x => x === d);
-    const emRank  = emSorted.findIndex(x => x === d);
-    d.euiPct = Math.round((euiRank / (n - 1)) * 100);
-    d.emPct  = Math.round((emRank  / (n - 1)) * 100);
+  // Assign ranks directly from sorted position — O(n log n) instead of O(n²)
+  [...data].sort((a, b) => a.eui - b.eui).forEach((d, i) => {
+    d.euiPct = Math.round((i / (n - 1)) * 100);
+  });
+  [...data].sort((a, b) => a.emissions - b.emissions).forEach((d, i) => {
+    d.emPct = Math.round((i / (n - 1)) * 100);
   });
 }
 
