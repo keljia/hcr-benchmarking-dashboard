@@ -108,6 +108,17 @@
     }
     .filter-bar .stat-pill span { color: var(--text); font-weight: 600; }
 
+    .filter-sep { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
+
+    .slider-group { display: flex; flex-direction: column; gap: 3px; }
+    .slider-group > label { font-size: 0.72rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+    .slider-wrap { display: flex; align-items: center; gap: 4px; }
+    .slider-wrap input[type="range"] {
+      width: 72px; cursor: pointer; accent-color: var(--accent);
+      height: 4px; padding: 0;
+    }
+    .slider-val { font-size: 0.75rem; color: var(--text); font-weight: 600; min-width: 72px; white-space: nowrap; }
+
     .section-title {
       font-size: 1rem; font-weight: 700; color: var(--text);
       margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
@@ -155,8 +166,8 @@
     }
 
     /* ---- Map View ---- */
-    #view-map { position: relative; }
-    #map { flex: 1; }
+    #view-map { position: relative; flex-direction: column; }
+    #map { flex: 1; min-height: 0; }
 
     .map-legend {
       position: absolute; bottom: 30px; right: 12px; z-index: 1000;
@@ -175,13 +186,19 @@
     .legend-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); }
 
     .map-filter-bar {
-      position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
-      z-index: 1000; background: rgba(255, 255, 255, 0.92);
-      border: 1px solid var(--border); border-radius: 8px;
-      padding: 8px 14px; display: flex; align-items: center; gap: 10px;
-      backdrop-filter: blur(4px); font-size: 0.82rem;
+      flex-shrink: 0;
+      z-index: 1000; background: rgba(255, 255, 255, 0.96);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 16px; display: flex; align-items: center; gap: 12px;
+      font-size: 0.82rem; flex-wrap: wrap;
     }
-    .map-count { color: var(--muted); font-size: 0.78rem; }
+    .map-filter-bar label { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+    .map-filter-bar select {
+      background: var(--surface2); color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 4px 10px; font-size: 0.82rem; cursor: pointer;
+    }
+    .map-count { margin-left: auto; color: var(--muted); font-size: 0.78rem; }
     .map-count span { color: var(--text); font-weight: 600; }
 
     .leaflet-popup-content-wrapper {
@@ -301,6 +318,24 @@
       <select id="portfolio-filter" onchange="updatePortfolioView()">
         <option value="All">All Portfolios</option>
       </select>
+      <div class="filter-sep"></div>
+      <div class="slider-group">
+        <label>Units</label>
+        <div class="slider-wrap">
+          <input type="range" id="p-units-min" oninput="updatePortfolioView()">
+          <input type="range" id="p-units-max" oninput="updatePortfolioView()">
+          <span class="slider-val" id="p-units-val">—</span>
+        </div>
+      </div>
+      <div class="filter-sep"></div>
+      <div class="slider-group">
+        <label>Building Size (sqft)</label>
+        <div class="slider-wrap">
+          <input type="range" id="p-sqft-min" oninput="updatePortfolioView()">
+          <input type="range" id="p-sqft-max" oninput="updatePortfolioView()">
+          <span class="slider-val" id="p-sqft-val">—</span>
+        </div>
+      </div>
       <div class="stat-pill">Showing <span id="filtered-count">—</span> properties</div>
     </div>
 
@@ -359,11 +394,34 @@
 
   <!-- Map View -->
   <div id="view-map" class="view">
-    <div id="map"></div>
     <div class="map-filter-bar">
       <span style="color:var(--muted); font-weight:600;">Map</span>
+      <div class="filter-sep"></div>
+      <label>Portfolio</label>
+      <select id="map-portfolio-filter" onchange="updateMapView()">
+        <option value="All">All Portfolios</option>
+      </select>
+      <div class="filter-sep"></div>
+      <div class="slider-group">
+        <label>Units</label>
+        <div class="slider-wrap">
+          <input type="range" id="m-units-min" oninput="updateMapView()">
+          <input type="range" id="m-units-max" oninput="updateMapView()">
+          <span class="slider-val" id="m-units-val">—</span>
+        </div>
+      </div>
+      <div class="filter-sep"></div>
+      <div class="slider-group">
+        <label>Building Size (sqft)</label>
+        <div class="slider-wrap">
+          <input type="range" id="m-sqft-min" oninput="updateMapView()">
+          <input type="range" id="m-sqft-max" oninput="updateMapView()">
+          <span class="slider-val" id="m-sqft-val">—</span>
+        </div>
+      </div>
       <span class="map-count"><span id="map-count">—</span> properties shown</span>
     </div>
+    <div id="map"></div>
     <div class="map-legend">
       <h4>Emissions Intensity</h4>
       <div class="legend-gradient"></div>
@@ -507,10 +565,68 @@ function renderTable(tableId, rows, valueKey, unit, colorClass) {
   }).join('');
 }
 
+// ─── Slider Utilities ─────────────────────────────────────────────────────────
+function parseUnits(d) {
+  if (!d.units) return null;
+  return parseInt(d.units.toString().replace(/,/g, ''), 10) || null;
+}
+function parseSqft(d) {
+  if (!d.sqft) return null;
+  return parseInt(d.sqft.toString().replace(/,/g, ''), 10) || null;
+}
+
+function fmtSliderVal(v) {
+  if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
+  if (v >= 1000)    return (v / 1000).toFixed(0) + 'k';
+  return v.toString();
+}
+
+function updateSliderLabel(prefix, field) {
+  const minEl = document.getElementById(`${prefix}-${field}-min`);
+  const maxEl = document.getElementById(`${prefix}-${field}-max`);
+  const valEl = document.getElementById(`${prefix}-${field}-val`);
+  if (!minEl || !maxEl || !valEl) return;
+  const lo = Math.min(+minEl.value, +maxEl.value);
+  const hi = Math.max(+minEl.value, +maxEl.value);
+  valEl.textContent = `${fmtSliderVal(lo)} – ${fmtSliderVal(hi)}`;
+}
+
+function getSliderRange(prefix, field) {
+  const minEl = document.getElementById(`${prefix}-${field}-min`);
+  const maxEl = document.getElementById(`${prefix}-${field}-max`);
+  return {
+    lo: Math.min(+minEl.value, +maxEl.value),
+    hi: Math.max(+minEl.value, +maxEl.value),
+    absMin: +minEl.min,
+    absMax: +minEl.max,
+  };
+}
+
+function applySliderFilters(data, prefix) {
+  const unitsR = getSliderRange(prefix, 'units');
+  const sqftR  = getSliderRange(prefix, 'sqft');
+  const unitsActive = unitsR.lo > unitsR.absMin || unitsR.hi < unitsR.absMax;
+  const sqftActive  = sqftR.lo  > sqftR.absMin  || sqftR.hi  < sqftR.absMax;
+  return data.filter(d => {
+    if (unitsActive) {
+      const u = parseUnits(d);
+      if (u !== null && (u < unitsR.lo || u > unitsR.hi)) return false;
+    }
+    if (sqftActive) {
+      const s = parseSqft(d);
+      if (s !== null && (s < sqftR.lo || s > sqftR.hi)) return false;
+    }
+    return true;
+  });
+}
+
 // ─── Portfolio View ───────────────────────────────────────────────────────────
 function updatePortfolioView() {
   const sel = document.getElementById('portfolio-filter').value;
-  const filtered = sel === 'All' ? allData : allData.filter(d => d.portfolio === sel);
+  updateSliderLabel('p', 'units');
+  updateSliderLabel('p', 'sqft');
+  let filtered = sel === 'All' ? allData : allData.filter(d => d.portfolio === sel);
+  filtered = applySliderFilters(filtered, 'p');
 
   document.getElementById('filtered-count').textContent = filtered.length.toLocaleString();
 
@@ -571,7 +687,30 @@ function initMap() {
     return marker;
   });
 
-  document.getElementById('map-count').textContent = allData.length.toLocaleString();
+  updateMapView();
+}
+
+function updateMapView() {
+  if (!leafletMap) return;
+  updateSliderLabel('m', 'units');
+  updateSliderLabel('m', 'sqft');
+
+  const portfolioSel = document.getElementById('map-portfolio-filter').value;
+  let filtered = portfolioSel === 'All' ? allData : allData.filter(d => d.portfolio === portfolioSel);
+  filtered = applySliderFilters(filtered, 'm');
+
+  const visibleIdxSet = new Set(filtered.map(d => d.idx));
+  mapMarkers.forEach((marker, i) => {
+    if (visibleIdxSet.has(i)) {
+      marker.setStyle({ opacity: 1, fillOpacity: 0.85 });
+      marker.options._hidden = false;
+    } else {
+      marker.setStyle({ opacity: 0, fillOpacity: 0 });
+      marker.options._hidden = true;
+    }
+  });
+
+  document.getElementById('map-count').textContent = filtered.length.toLocaleString();
 }
 
 // ─── Property View ────────────────────────────────────────────────────────────
@@ -667,14 +806,40 @@ try {
   // Compute global percentile ranks (lower value = lower percentile = better)
   computeAllPercentiles(allData);
 
-  // Populate portfolio filter
+  // Populate portfolio filters (portfolio view + map view)
   const portfolios = [...new Set(allData.map(d => d.portfolio))].sort();
-  const sel = document.getElementById('portfolio-filter');
-  portfolios.forEach(p => {
-    const opt = document.createElement('option');
-    opt.value = p;
-    opt.textContent = p;
-    sel.appendChild(opt);
+  [document.getElementById('portfolio-filter'), document.getElementById('map-portfolio-filter')].forEach(sel => {
+    portfolios.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p;
+      opt.textContent = p;
+      sel.appendChild(opt);
+    });
+  });
+
+  // Compute slider ranges from data
+  const unitsVals = allData.map(parseUnits).filter(v => v !== null);
+  const sqftVals  = allData.map(parseSqft).filter(v => v !== null);
+  const unitsMin  = Math.min(...unitsVals);
+  const unitsMax  = Math.max(...unitsVals);
+  const sqftMin   = Math.min(...sqftVals);
+  const sqftMax   = Math.max(...sqftVals);
+
+  ['p', 'm'].forEach(prefix => {
+    ['units', 'sqft'].forEach(field => {
+      const lo = field === 'units' ? unitsMin : sqftMin;
+      const hi = field === 'units' ? unitsMax : sqftMax;
+      const step = field === 'sqft' ? 1000 : 1;
+      const minEl = document.getElementById(`${prefix}-${field}-min`);
+      const maxEl = document.getElementById(`${prefix}-${field}-max`);
+      minEl.min = maxEl.min = lo;
+      minEl.max = maxEl.max = hi;
+      minEl.step = maxEl.step = step;
+      minEl.value = lo;
+      maxEl.value = hi;
+    });
+    updateSliderLabel(prefix, 'units');
+    updateSliderLabel(prefix, 'sqft');
   });
 
   // Initial render
