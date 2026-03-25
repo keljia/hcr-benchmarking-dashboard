@@ -110,14 +110,47 @@
 
     .filter-sep { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
 
-    .slider-group { display: flex; flex-direction: column; gap: 3px; }
+    .slider-group { display: flex; flex-direction: column; gap: 4px; }
     .slider-group > label { font-size: 0.72rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
-    .slider-wrap { display: flex; align-items: center; gap: 4px; }
-    .slider-wrap input[type="range"] {
-      width: 72px; cursor: pointer; accent-color: var(--accent);
-      height: 4px; padding: 0;
+
+    /* Dual-range slider */
+    .range-slider-container {
+      position: relative; height: 20px; width: 150px;
     }
-    .slider-val { font-size: 0.75rem; color: var(--text); font-weight: 600; min-width: 72px; white-space: nowrap; }
+    .range-track {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      width: 100%; height: 4px; background: var(--border); border-radius: 2px;
+      pointer-events: none;
+    }
+    .range-fill {
+      position: absolute; height: 100%;
+      background: var(--accent); border-radius: 2px;
+    }
+    .range-thumb {
+      position: absolute; width: 100%; height: 4px;
+      -webkit-appearance: none; appearance: none;
+      background: transparent; pointer-events: none;
+      top: 50%; transform: translateY(-50%); margin: 0; padding: 0;
+    }
+    .range-thumb::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--accent); border: 2px solid white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25); cursor: pointer; pointer-events: all;
+    }
+    .range-thumb::-moz-range-thumb {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: var(--accent); border: 2px solid white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25); cursor: pointer; pointer-events: all;
+    }
+    .range-num-row { display: flex; align-items: center; gap: 3px; }
+    .range-num {
+      width: 56px; padding: 2px 5px; font-size: 0.73rem;
+      border: 1px solid var(--border); border-radius: 4px;
+      background: var(--surface2); color: var(--text);
+    }
+    .range-num:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+    .range-dash { font-size: 0.8rem; color: var(--muted); }
 
     .section-title {
       font-size: 1rem; font-weight: 700; color: var(--text);
@@ -315,25 +348,35 @@
   <div id="view-portfolio" class="view active">
     <div class="filter-bar">
       <label>Portfolio</label>
-      <select id="portfolio-filter" onchange="updatePortfolioView()">
+      <select id="portfolio-filter" onchange="onPortfolioChange(this.value)">
         <option value="All">All Portfolios</option>
       </select>
       <div class="filter-sep"></div>
       <div class="slider-group">
         <label>Units</label>
-        <div class="slider-wrap">
-          <input type="range" id="p-units-min" oninput="updatePortfolioView()">
-          <input type="range" id="p-units-max" oninput="updatePortfolioView()">
-          <span class="slider-val" id="p-units-val">—</span>
+        <div class="range-slider-container">
+          <div class="range-track"><div class="range-fill" id="p-units-fill"></div></div>
+          <input type="range" id="p-units-lo" class="range-thumb" oninput="onRangeChange('p','units','lo')">
+          <input type="range" id="p-units-hi" class="range-thumb" oninput="onRangeChange('p','units','hi')">
+        </div>
+        <div class="range-num-row">
+          <input type="number" id="p-units-lo-num" class="range-num" onchange="onNumChange('p','units','lo')">
+          <span class="range-dash">–</span>
+          <input type="number" id="p-units-hi-num" class="range-num" onchange="onNumChange('p','units','hi')">
         </div>
       </div>
       <div class="filter-sep"></div>
       <div class="slider-group">
         <label>Building Size (sqft)</label>
-        <div class="slider-wrap">
-          <input type="range" id="p-sqft-min" oninput="updatePortfolioView()">
-          <input type="range" id="p-sqft-max" oninput="updatePortfolioView()">
-          <span class="slider-val" id="p-sqft-val">—</span>
+        <div class="range-slider-container">
+          <div class="range-track"><div class="range-fill" id="p-sqft-fill"></div></div>
+          <input type="range" id="p-sqft-lo" class="range-thumb" oninput="onRangeChange('p','sqft','lo')">
+          <input type="range" id="p-sqft-hi" class="range-thumb" oninput="onRangeChange('p','sqft','hi')">
+        </div>
+        <div class="range-num-row">
+          <input type="number" id="p-sqft-lo-num" class="range-num" onchange="onNumChange('p','sqft','lo')">
+          <span class="range-dash">–</span>
+          <input type="number" id="p-sqft-hi-num" class="range-num" onchange="onNumChange('p','sqft','hi')">
         </div>
       </div>
       <div class="stat-pill">Showing <span id="filtered-count">—</span> properties</div>
@@ -398,25 +441,35 @@
       <span style="color:var(--muted); font-weight:600;">Map</span>
       <div class="filter-sep"></div>
       <label>Portfolio</label>
-      <select id="map-portfolio-filter" onchange="updateMapView()">
+      <select id="map-portfolio-filter" onchange="onPortfolioChange(this.value)">
         <option value="All">All Portfolios</option>
       </select>
       <div class="filter-sep"></div>
       <div class="slider-group">
         <label>Units</label>
-        <div class="slider-wrap">
-          <input type="range" id="m-units-min" oninput="updateMapView()">
-          <input type="range" id="m-units-max" oninput="updateMapView()">
-          <span class="slider-val" id="m-units-val">—</span>
+        <div class="range-slider-container">
+          <div class="range-track"><div class="range-fill" id="m-units-fill"></div></div>
+          <input type="range" id="m-units-lo" class="range-thumb" oninput="onRangeChange('m','units','lo')">
+          <input type="range" id="m-units-hi" class="range-thumb" oninput="onRangeChange('m','units','hi')">
+        </div>
+        <div class="range-num-row">
+          <input type="number" id="m-units-lo-num" class="range-num" onchange="onNumChange('m','units','lo')">
+          <span class="range-dash">–</span>
+          <input type="number" id="m-units-hi-num" class="range-num" onchange="onNumChange('m','units','hi')">
         </div>
       </div>
       <div class="filter-sep"></div>
       <div class="slider-group">
         <label>Building Size (sqft)</label>
-        <div class="slider-wrap">
-          <input type="range" id="m-sqft-min" oninput="updateMapView()">
-          <input type="range" id="m-sqft-max" oninput="updateMapView()">
-          <span class="slider-val" id="m-sqft-val">—</span>
+        <div class="range-slider-container">
+          <div class="range-track"><div class="range-fill" id="m-sqft-fill"></div></div>
+          <input type="range" id="m-sqft-lo" class="range-thumb" oninput="onRangeChange('m','sqft','lo')">
+          <input type="range" id="m-sqft-hi" class="range-thumb" oninput="onRangeChange('m','sqft','hi')">
+        </div>
+        <div class="range-num-row">
+          <input type="number" id="m-sqft-lo-num" class="range-num" onchange="onNumChange('m','sqft','lo')">
+          <span class="range-dash">–</span>
+          <input type="number" id="m-sqft-hi-num" class="range-num" onchange="onNumChange('m','sqft','hi')">
         </div>
       </div>
       <span class="map-count"><span id="map-count">—</span> properties shown</span>
@@ -453,6 +506,9 @@ let leafletMap = null;
 let mapMarkers = [];
 let currentProperty = null;
 let backView = 'portfolio';
+
+const filterState = { portfolio: 'All', unitsLo: 0, unitsHi: 0, sqftLo: 0, sqftHi: 0 };
+const sliderBounds = { unitsMin: 0, unitsMax: 0, sqftMin: 0, sqftMax: 0 };
 
 // ─── Color Utilities ─────────────────────────────────────────────────────────
 function pctColor(pct) {
@@ -565,7 +621,7 @@ function renderTable(tableId, rows, valueKey, unit, colorClass) {
   }).join('');
 }
 
-// ─── Slider Utilities ─────────────────────────────────────────────────────────
+// ─── Filter Utilities ─────────────────────────────────────────────────────────
 function parseUnits(d) {
   if (!d.units) return null;
   return parseInt(d.units.toString().replace(/,/g, ''), 10) || null;
@@ -575,77 +631,119 @@ function parseSqft(d) {
   return parseInt(d.sqft.toString().replace(/,/g, ''), 10) || null;
 }
 
-function fmtSliderVal(v) {
-  if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
-  if (v >= 1000)    return (v / 1000).toFixed(0) + 'k';
-  return v.toString();
+// Sync all DOM controls (both views) to match filterState
+function syncDOM() {
+  for (const prefix of ['p', 'm']) {
+    const portEl = document.getElementById(prefix === 'p' ? 'portfolio-filter' : 'map-portfolio-filter');
+    if (portEl) portEl.value = filterState.portfolio;
+    for (const field of ['units', 'sqft']) {
+      const lo = filterState[field + 'Lo'];
+      const hi = filterState[field + 'Hi'];
+      const loRange = document.getElementById(`${prefix}-${field}-lo`);
+      const hiRange = document.getElementById(`${prefix}-${field}-hi`);
+      const loNum   = document.getElementById(`${prefix}-${field}-lo-num`);
+      const hiNum   = document.getElementById(`${prefix}-${field}-hi-num`);
+      if (loRange) { loRange.value = lo; hiRange.value = hi; }
+      if (loNum)   { loNum.value = lo;   hiNum.value = hi; }
+      updateRangeFill(prefix, field);
+    }
+  }
 }
 
-function updateSliderLabel(prefix, field) {
-  const minEl = document.getElementById(`${prefix}-${field}-min`);
-  const maxEl = document.getElementById(`${prefix}-${field}-max`);
-  const valEl = document.getElementById(`${prefix}-${field}-val`);
-  if (!minEl || !maxEl || !valEl) return;
-  const lo = Math.min(+minEl.value, +maxEl.value);
-  const hi = Math.max(+minEl.value, +maxEl.value);
-  valEl.textContent = `${fmtSliderVal(lo)} – ${fmtSliderVal(hi)}`;
+// Update the colored fill strip between the two thumbs
+function updateRangeFill(prefix, field) {
+  const loRange = document.getElementById(`${prefix}-${field}-lo`);
+  const hiRange = document.getElementById(`${prefix}-${field}-hi`);
+  const fill    = document.getElementById(`${prefix}-${field}-fill`);
+  if (!loRange || !fill) return;
+  const min   = +loRange.min, max = +loRange.max;
+  const loPos = ((+loRange.value - min) / (max - min)) * 100;
+  const hiPos = ((+hiRange.value - min) / (max - min)) * 100;
+  fill.style.left  = loPos + '%';
+  fill.style.width = (hiPos - loPos) + '%';
 }
 
-function getSliderRange(prefix, field) {
-  const minEl = document.getElementById(`${prefix}-${field}-min`);
-  const maxEl = document.getElementById(`${prefix}-${field}-max`);
-  return {
-    lo: Math.min(+minEl.value, +maxEl.value),
-    hi: Math.max(+minEl.value, +maxEl.value),
-    absMin: +minEl.min,
-    absMax: +minEl.max,
-  };
-}
-
-function applySliderFilters(data, prefix) {
-  const unitsR = getSliderRange(prefix, 'units');
-  const sqftR  = getSliderRange(prefix, 'sqft');
-  const unitsActive = unitsR.lo > unitsR.absMin || unitsR.hi < unitsR.absMax;
-  const sqftActive  = sqftR.lo  > sqftR.absMin  || sqftR.hi  < sqftR.absMax;
+// Compute filtered dataset from shared filterState
+function getFilteredData() {
+  let data = filterState.portfolio === 'All'
+    ? allData
+    : allData.filter(d => d.portfolio === filterState.portfolio);
+  const unitsActive = filterState.unitsLo > sliderBounds.unitsMin || filterState.unitsHi < sliderBounds.unitsMax;
+  const sqftActive  = filterState.sqftLo  > sliderBounds.sqftMin  || filterState.sqftHi  < sliderBounds.sqftMax;
   return data.filter(d => {
     if (unitsActive) {
       const u = parseUnits(d);
-      if (u !== null && (u < unitsR.lo || u > unitsR.hi)) return false;
+      if (u !== null && (u < filterState.unitsLo || u > filterState.unitsHi)) return false;
     }
     if (sqftActive) {
       const s = parseSqft(d);
-      if (s !== null && (s < sqftR.lo || s > sqftR.hi)) return false;
+      if (s !== null && (s < filterState.sqftLo || s > filterState.sqftHi)) return false;
     }
     return true;
   });
 }
 
-// ─── Portfolio View ───────────────────────────────────────────────────────────
-function updatePortfolioView() {
-  const sel = document.getElementById('portfolio-filter').value;
-  updateSliderLabel('p', 'units');
-  updateSliderLabel('p', 'sqft');
-  let filtered = sel === 'All' ? allData : allData.filter(d => d.portfolio === sel);
-  filtered = applySliderFilters(filtered, 'p');
+// Re-render both views with current filterState (single source of truth)
+function applyFilters() {
+  syncDOM();
+  const filtered = getFilteredData();
 
+  // Portfolio view
   document.getElementById('filtered-count').textContent = filtered.length.toLocaleString();
-
-  // EUI top/bottom 10
   const byEui = [...filtered].sort((a, b) => a.eui - b.eui);
-  renderTable('eui-best-table',  byEui.slice(0, 10),   'eui', 'kBTU/sqft', 'best');
+  renderTable('eui-best-table',  byEui.slice(0, 10),        'eui', 'kBTU/sqft', 'best');
   renderTable('eui-worst-table', byEui.slice(-10).reverse(), 'eui', 'kBTU/sqft', 'worst');
-
-  // Emissions top/bottom 10
   const byEm = [...filtered].sort((a, b) => a.emissions - b.emissions);
-  renderTable('em-best-table',  byEm.slice(0, 10),   'emissions', '', 'best');
+  renderTable('em-best-table',  byEm.slice(0, 10),         'emissions', '', 'best');
   renderTable('em-worst-table', byEm.slice(-10).reverse(), 'emissions', '', 'worst');
-
-  // Histograms
   euiChart = renderHistogram('eui-hist', euiChart, filtered.map(d => d.eui),
     20, 122, 5, 'EUI (kBTU/sqft)', 'rgba(96, 165, 250, 0.7)');
   emChart  = renderHistogram('em-hist',  emChart,  filtered.map(d => d.emissions),
     1.0, 7.75, 0.25, 'Emissions Intensity', 'rgba(167, 139, 250, 0.7)');
+
+  // Map view (if initialized)
+  if (leafletMap) {
+    const visibleSet = new Set(filtered.map(d => d.idx));
+    mapMarkers.forEach((marker, i) => {
+      if (visibleSet.has(i)) marker.setStyle({ opacity: 1, fillOpacity: 0.85 });
+      else                   marker.setStyle({ opacity: 0, fillOpacity: 0 });
+    });
+    document.getElementById('map-count').textContent = filtered.length.toLocaleString();
+  }
 }
+
+// ─── Filter Event Handlers ─────────────────────────────────────────────────────
+function onPortfolioChange(value) {
+  filterState.portfolio = value;
+  applyFilters();
+}
+
+function onRangeChange(prefix, field, which) {
+  const lo = +document.getElementById(`${prefix}-${field}-lo`).value;
+  const hi = +document.getElementById(`${prefix}-${field}-hi`).value;
+  // Clamp: lo cannot exceed hi, hi cannot go below lo
+  filterState[field + 'Lo'] = which === 'lo' ? Math.min(lo, filterState[field + 'Hi']) : filterState[field + 'Lo'];
+  filterState[field + 'Hi'] = which === 'hi' ? Math.max(hi, filterState[field + 'Lo']) : filterState[field + 'Hi'];
+  // Update clamped value back into the moved thumb
+  if (which === 'lo') filterState[field + 'Lo'] = Math.min(lo, filterState[field + 'Hi']);
+  else                filterState[field + 'Hi'] = Math.max(hi, filterState[field + 'Lo']);
+  applyFilters();
+}
+
+function onNumChange(prefix, field, which) {
+  let value = +document.getElementById(`${prefix}-${field}-${which}-num`).value;
+  const absMin = sliderBounds[field + 'Min'];
+  const absMax = sliderBounds[field + 'Max'];
+  if (which === 'lo') {
+    filterState[field + 'Lo'] = Math.max(absMin, Math.min(value, filterState[field + 'Hi']));
+  } else {
+    filterState[field + 'Hi'] = Math.min(absMax, Math.max(value, filterState[field + 'Lo']));
+  }
+  applyFilters();
+}
+
+// Keep old name callable for backward-compat (e.g. called from init)
+function updatePortfolioView() { applyFilters(); }
 
 // ─── Map ─────────────────────────────────────────────────────────────────────
 function initMap() {
@@ -687,30 +785,8 @@ function initMap() {
     return marker;
   });
 
-  updateMapView();
-}
-
-function updateMapView() {
-  if (!leafletMap) return;
-  updateSliderLabel('m', 'units');
-  updateSliderLabel('m', 'sqft');
-
-  const portfolioSel = document.getElementById('map-portfolio-filter').value;
-  let filtered = portfolioSel === 'All' ? allData : allData.filter(d => d.portfolio === portfolioSel);
-  filtered = applySliderFilters(filtered, 'm');
-
-  const visibleIdxSet = new Set(filtered.map(d => d.idx));
-  mapMarkers.forEach((marker, i) => {
-    if (visibleIdxSet.has(i)) {
-      marker.setStyle({ opacity: 1, fillOpacity: 0.85 });
-      marker.options._hidden = false;
-    } else {
-      marker.setStyle({ opacity: 0, fillOpacity: 0 });
-      marker.options._hidden = true;
-    }
-  });
-
-  document.getElementById('map-count').textContent = filtered.length.toLocaleString();
+  // Apply current filterState to newly created markers
+  applyFilters();
 }
 
 // ─── Property View ────────────────────────────────────────────────────────────
@@ -817,33 +893,40 @@ try {
     });
   });
 
-  // Compute slider ranges from data
+  // Compute slider bounds from data
   const unitsVals = allData.map(parseUnits).filter(v => v !== null);
   const sqftVals  = allData.map(parseSqft).filter(v => v !== null);
-  const unitsMin  = Math.min(...unitsVals);
-  const unitsMax  = Math.max(...unitsVals);
-  const sqftMin   = Math.min(...sqftVals);
-  const sqftMax   = Math.max(...sqftVals);
+  sliderBounds.unitsMin = Math.min(...unitsVals);
+  sliderBounds.unitsMax = Math.max(...unitsVals);
+  sliderBounds.sqftMin  = Math.min(...sqftVals);
+  sliderBounds.sqftMax  = Math.max(...sqftVals);
 
-  ['p', 'm'].forEach(prefix => {
-    ['units', 'sqft'].forEach(field => {
-      const lo = field === 'units' ? unitsMin : sqftMin;
-      const hi = field === 'units' ? unitsMax : sqftMax;
-      const step = field === 'sqft' ? 1000 : 1;
-      const minEl = document.getElementById(`${prefix}-${field}-min`);
-      const maxEl = document.getElementById(`${prefix}-${field}-max`);
-      minEl.min = maxEl.min = lo;
-      minEl.max = maxEl.max = hi;
-      minEl.step = maxEl.step = step;
-      minEl.value = lo;
-      maxEl.value = hi;
-    });
-    updateSliderLabel(prefix, 'units');
-    updateSliderLabel(prefix, 'sqft');
-  });
+  // Initialize filterState to full range
+  filterState.unitsLo = sliderBounds.unitsMin;
+  filterState.unitsHi = sliderBounds.unitsMax;
+  filterState.sqftLo  = sliderBounds.sqftMin;
+  filterState.sqftHi  = sliderBounds.sqftMax;
 
-  // Initial render
-  updatePortfolioView();
+  // Configure range input attributes for both views
+  for (const prefix of ['p', 'm']) {
+    for (const [field, step] of [['units', 1], ['sqft', 1000]]) {
+      const lo = sliderBounds[field + 'Min'];
+      const hi = sliderBounds[field + 'Max'];
+      for (const which of ['lo', 'hi']) {
+        const el = document.getElementById(`${prefix}-${field}-${which}`);
+        el.min = lo; el.max = hi; el.step = step;
+        el.value = which === 'lo' ? lo : hi;
+      }
+      for (const which of ['lo', 'hi']) {
+        const el = document.getElementById(`${prefix}-${field}-${which}-num`);
+        el.min = lo; el.max = hi; el.step = step;
+        el.value = which === 'lo' ? lo : hi;
+      }
+    }
+  }
+
+  // Initial render (syncs DOM and applies filters)
+  applyFilters();
 
   // Show app
   document.getElementById('loading').style.display = 'none';
